@@ -49,7 +49,25 @@ export function startCredentialProxy(
       const chunks: Buffer[] = [];
       req.on('data', (c) => chunks.push(c));
       req.on('end', () => {
-        const body = Buffer.concat(chunks);
+        let body = Buffer.concat(chunks);
+
+        // Fix lone UTF-16 surrogates in JSON bodies that cause Anthropic API
+        // "no low surrogate in string" errors.  Lone surrogates appear as
+        // \uD800-\uDFFF JSON escapes without a valid pair.  Replace them with
+        // the Unicode replacement character (\uFFFD).
+        const ct = req.headers['content-type'] || '';
+        if (ct.includes('json')) {
+          const raw = body.toString('utf8');
+          const fixed = raw.replace(
+            /\\u[Dd][89AaBb][0-9A-Fa-f]{2}(?!\\u[Dd][CcDdEeFf][0-9A-Fa-f]{2})|(?<!\\u[Dd][89AaBb][0-9A-Fa-f]{2})\\u[Dd][CcDdEeFf][0-9A-Fa-f]{2}/g,
+            '\\uFFFD',
+          );
+          if (fixed !== raw) {
+            logger.warn('Replaced lone surrogate(s) in API request body');
+            body = Buffer.from(fixed, 'utf8');
+          }
+        }
+
         const headers: Record<string, string | number | string[] | undefined> =
           {
             ...(req.headers as Record<string, string>),

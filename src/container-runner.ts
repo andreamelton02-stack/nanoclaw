@@ -43,7 +43,6 @@ export interface ContainerInput {
   isScheduledTask?: boolean;
   assistantName?: string;
   imageAttachments?: Array<{ relativePath: string; mediaType: string }>;
-
 }
 
 export interface ContainerOutput {
@@ -235,10 +234,13 @@ function buildContainerArgs(
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
 
+  // Use host network so containers can reach the credential proxy on localhost
+  args.push('--network', 'host');
+
   // Route API traffic through the credential proxy (containers never see real secrets)
   args.push(
     '-e',
-    `ANTHROPIC_BASE_URL=http://${CONTAINER_HOST_GATEWAY}:${CREDENTIAL_PROXY_PORT}`,
+    `ANTHROPIC_BASE_URL=http://127.0.0.1:${CREDENTIAL_PROXY_PORT}`,
   );
 
   // Mirror the host's auth method with a placeholder value.
@@ -252,8 +254,27 @@ function buildContainerArgs(
     args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
   }
 
-  // Runtime-specific args for host gateway resolution
-  args.push(...hostGatewayArgs());
+  // Pass Dropbox credentials to container for MCP server
+  if (process.env.DROPBOX_CLIENT_ID) {
+    args.push('-e', `DROPBOX_CLIENT_ID=${process.env.DROPBOX_CLIENT_ID}`);
+  }
+  if (process.env.DROPBOX_CLIENT_SECRET) {
+    args.push(
+      '-e',
+      `DROPBOX_CLIENT_SECRET=${process.env.DROPBOX_CLIENT_SECRET}`,
+    );
+  }
+  if (process.env.DROPBOX_REFRESH_TOKEN) {
+    args.push(
+      '-e',
+      `DROPBOX_REFRESH_TOKEN=${process.env.DROPBOX_REFRESH_TOKEN}`,
+    );
+  }
+
+  // Pass calendar IDs to container for multi-calendar MCP server
+  if (process.env.CALENDAR_IDS) {
+    args.push('-e', `CALENDAR_IDS=${process.env.CALENDAR_IDS}`);
+  }
 
   // Run as host user so bind-mounted files are accessible.
   // Skip when running as root (uid 0), as the container's node user (uid 1000),
@@ -332,6 +353,11 @@ export async function runContainerAgent(
     let stdoutTruncated = false;
     let stderrTruncated = false;
 
+    // Live log: stream agent activity to a file that can be tailed in real time
+    const liveLogFile = path.join(logsDir, 'live.log');
+    const liveStream = fs.createWriteStream(liveLogFile, { flags: 'w' });
+    liveStream.write(`=== ${group.name} | ${new Date().toISOString()} ===\n`);
+
     container.stdin.write(JSON.stringify(input));
     container.stdin.end();
 
@@ -379,6 +405,9 @@ export async function runContainerAgent(
             hadStreamingOutput = true;
             // Activity detected — reset the hard timeout
             resetTimeout();
+            if (parsed.result) {
+              liveStream.write(`[output] ${parsed.result.slice(0, 500)}\n`);
+            }
             // Call onOutput for all markers (including null results)
             // so idle timers start even for "silent" query completions.
             outputChain = outputChain.then(() => onOutput(parsed));
@@ -396,7 +425,10 @@ export async function runContainerAgent(
       const chunk = data.toString();
       const lines = chunk.trim().split('\n');
       for (const line of lines) {
-        if (line) logger.debug({ container: group.folder }, line);
+        if (line) {
+          logger.debug({ container: group.folder }, line);
+          liveStream.write(line + '\n');
+        }
       }
       // Don't reset timeout on stderr — SDK writes debug logs continuously.
       // Timeout only resets on actual output (OUTPUT_MARKER in stdout).
@@ -449,6 +481,8 @@ export async function runContainerAgent(
     container.on('close', (code) => {
       clearTimeout(timeout);
       const duration = Date.now() - startTime;
+      liveStream.write(`=== Done | ${duration}ms | exit ${code} ===\n`);
+      liveStream.end();
 
       if (timedOut) {
         const ts = new Date().toISOString().replace(/[:.]/g, '-');
