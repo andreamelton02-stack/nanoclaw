@@ -1,0 +1,34 @@
+services:
+  jeeves:
+    build:
+      context: .
+      dockerfile: Dockerfile.host
+    container_name: nanoclaw-jeeves
+    restart: always
+
+    # Mount Docker socket so the main process can spawn agent sub-containers
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Mount the host directory at the SAME path inside the container.
+      # This is critical: when the main process calculates volume mount paths
+      # for agent sub-containers (via process.cwd()), those paths must be valid
+      # HOST paths since the sub-containers run on the host Docker daemon.
+      - /home/melto007/nanoclaw-jeeves:/home/melto007/nanoclaw-jeeves
+
+    # Host network so the credential proxy (port 3002) is accessible
+    # to agent sub-containers via host.docker.internal
+    network_mode: host
+
+    # Run as host user so file ownership matches
+    user: "${UID:-1000}:${GID:-1000}"
+
+    # Load environment from .env
+    env_file:
+      - .env
+
+    # Extra env for container runtime
+    environment:
+      - HOME=/home/melto007
+
+    working_dir: /home/melto007/nanoclaw-jeeves
