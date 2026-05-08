@@ -75,6 +75,15 @@ No `##` headings. No `[links](url)`. No `**double stars**`.
 
 Standard Markdown works: `**bold**`, `*italic*`, `[links](url)`, `# headings`.
 
+## Audio & Voice Transcription
+
+Voice messages and audio files are automatically transcribed by the host before they reach you.  You will see `[Voice transcript] ...` or `[Audio transcript] ...`.
+
+If transcription failed, you will see `[Voice message: attachments/...]` or `[Audio: attachments/...]` with the saved file path.  In that case:
+- **DO NOT install whisper, openai-whisper, torch, or any transcription tools.**  They consume all CPU/RAM and block everything.
+- **DO NOT run ffmpeg + whisper yourself.**  The host handles transcription.
+- Let the user know the file was saved but transcription is backed up.
+
 ---
 
 ## Task Scripts

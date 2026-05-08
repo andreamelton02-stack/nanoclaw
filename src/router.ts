@@ -36,10 +36,20 @@ export function stripInternalTags(text: string): string {
   return text.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
 }
 
+/** Replace em/en dashes with hyphens and enforce double space after periods. */
+function enforceFormattingRules(text: string): string {
+  // Replace em dashes (—) and en dashes (–) with hyphens
+  let result = text.replace(/[\u2013\u2014]/g, '-');
+  // Enforce double space after periods (but not in URLs, numbers like 1.5, or ellipsis)
+  result = result.replace(/\.( )(?=[A-Z])/g, '.  ');
+  return result;
+}
+
 export function formatOutbound(rawText: string, channel?: ChannelType): string {
   const text = stripInternalTags(rawText);
   if (!text) return '';
-  return channel ? parseTextStyles(text, channel) : text;
+  const styled = channel ? parseTextStyles(text, channel) : text;
+  return enforceFormattingRules(styled);
 }
 
 export function routeOutbound(

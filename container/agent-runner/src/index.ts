@@ -21,8 +21,11 @@ import {
   query,
   HookCallback,
   PreCompactHookInput,
+  PostCompactHookInput,
 } from '@anthropic-ai/claude-agent-sdk';
 import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 interface ContainerInput {
   prompt: string;
@@ -38,7 +41,7 @@ interface ContainerInput {
 
 interface ImageContentBlock {
   type: 'image';
-  source: { type: 'base64'; media_type: string; data: string };
+  source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'; data: string };
 }
 interface TextContentBlock {
   type: 'text';
@@ -222,6 +225,70 @@ function createPreCompactHook(assistantName?: string): HookCallback {
       log(
         `Failed to archive transcript: ${err instanceof Error ? err.message : String(err)}`,
       );
+    }
+
+    return {};
+  };
+}
+
+/**
+ * Re-inject critical context after compaction via IPC.
+ * Reads CLAUDE.md and CLAUDE-MEMORY.md, writes them as an IPC message
+ * so pollIpcDuringQuery picks them up and pushes into the active stream.
+ */
+function createPostCompactHook(): HookCallback {
+  return async (input, _toolUseId, _context) => {
+    const postCompact = input as PostCompactHookInput;
+    log(`PostCompact fired (trigger: ${postCompact.trigger})`);
+
+    try {
+      const parts: string[] = [];
+
+      // Re-inject group identity and rules
+      const claudeMdPath = '/workspace/group/CLAUDE.md';
+      if (fs.existsSync(claudeMdPath)) {
+        const content = fs.readFileSync(claudeMdPath, 'utf-8').trim();
+        if (content) parts.push(content);
+      }
+
+      // Re-inject memory state
+      const memoryMdPath = '/workspace/group/CLAUDE-MEMORY.md';
+      if (fs.existsSync(memoryMdPath)) {
+        const content = fs.readFileSync(memoryMdPath, 'utf-8').trim();
+        if (content) parts.push(`## Memory State\n\n${content}`);
+      }
+
+      if (parts.length === 0) {
+        log('PostCompact: no context files found to re-inject');
+        return {};
+      }
+
+      // Cap at 3000 chars to avoid bloating the context
+      let contextBlock = parts.join('\n\n---\n\n');
+      if (contextBlock.length > 3000) {
+        contextBlock = contextBlock.slice(0, 3000) + '\n...[truncated]...';
+      }
+
+      const message = [
+        '[Post-compaction context refresh]',
+        '',
+        'Session was just compacted.  The conversation summary above is a hint, NOT a substitute for your identity and rules.',
+        'Re-read the critical context below and continue from where you left off.',
+        '',
+        contextBlock,
+      ].join('\n');
+
+      // Write as IPC message so pollIpcDuringQuery picks it up
+      fs.mkdirSync(IPC_INPUT_DIR, { recursive: true });
+      const filename = `${Date.now()}-postcompact.json`;
+      const filePath = path.join(IPC_INPUT_DIR, filename);
+      const tmpPath = filePath + '.tmp';
+      fs.writeFileSync(tmpPath, JSON.stringify({ type: 'message', text: message }));
+      fs.renameSync(tmpPath, filePath);
+
+      log(`PostCompact: wrote context refresh to ${filename}`);
+    } catch (err) {
+      log(`PostCompact error: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     return {};
@@ -414,7 +481,7 @@ async function runQuery(
       const imgPath = path.join('/workspace/group', img.relativePath);
       try {
         const data = fs.readFileSync(imgPath).toString('base64');
-        blocks.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data } });
+        blocks.push({ type: 'image', source: { type: 'base64', media_type: img.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp', data } });
       } catch (err) {
         log(`Failed to load image: ${imgPath}`);
       }
@@ -507,7 +574,9 @@ async function runQuery(
         'Skill',
         'NotebookEdit',
         'mcp__nanoclaw__*',
+        'mcp__calendar__*',
         'mcp__gmail__*',
+        'mcp__memory_kernel__*',
       ],
       env: sdkEnv,
       permissionMode: 'bypassPermissions',
@@ -523,14 +592,42 @@ async function runQuery(
             NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
           },
         },
+        calendar: {
+          command: 'node',
+          args: [path.join(__dirname, 'calendar-mcp.js')],
+          env: {
+            ...sdkEnv,
+            HOME: '/workspace/group',
+            CALENDAR_IDS: process.env.CALENDAR_IDS || 'primary',
+          },
+        },
         gmail: {
           command: 'npx',
           args: ['-y', '@gongrzhe/server-gmail-autoauth-mcp'],
+        },
+        memory_kernel: {
+          command: 'node',
+          args: ['/app/node_modules/memory-kernel/dist/mcp/server.js'],
+          env: {
+            MEMORY_DIR: '/workspace/group/memory-kernel',
+            MCP_AGENT_ID: containerInput.assistantName || 'agent',
+            MCP_SESSION_ID: `session-${Date.now()}`,
+          },
+        },
+        mempalace: {
+          command: 'python3',
+          args: ['-m', 'mempalace.mcp_server'],
+          env: {
+            MEMPALACE_PALACE_PATH: '/workspace/group/.mempalace',
+          },
         },
       },
       hooks: {
         PreCompact: [
           { hooks: [createPreCompactHook(containerInput.assistantName)] },
+        ],
+        PostCompact: [
+          { hooks: [createPostCompactHook()] },
         ],
       },
     },

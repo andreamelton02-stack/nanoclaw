@@ -2,14 +2,16 @@
  * Container Runner for NanoClaw
  * Spawns agent execution in containers and handles IPC
  */
-import { ChildProcess, spawn } from 'child_process';
+import { ChildProcess, execSync, spawn } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
 import {
+  ASSISTANT_NAME,
   CONTAINER_IMAGE,
   CONTAINER_MAX_OUTPUT_SIZE,
+  CONTAINER_PREFIX,
   CONTAINER_TIMEOUT,
   DATA_DIR,
   GROUPS_DIR,
@@ -188,7 +190,7 @@ function buildVolumeMounts(
 
   // Gmail credentials directory (for Gmail MCP inside the container)
   const homeDir = os.homedir();
-  const gmailDir = path.join(homeDir, '.gmail-mcp');
+  const gmailDir = process.env.GMAIL_CREDENTIALS_DIR || path.join(homeDir, '.gmail-mcp');
   if (fs.existsSync(gmailDir)) {
     mounts.push({
       hostPath: gmailDir,
@@ -265,36 +267,17 @@ async function buildContainerArgs(
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
 
-  // Use host network so containers can reach the credential proxy on localhost
+  // Use host network so containers can reach host services
   args.push('--network', 'host');
 
-  // Route API traffic through the credential proxy (containers never see real secrets)
-  const proxyPort = process.env.CREDENTIAL_PROXY_PORT || '3002';
-  args.push('-e', `ANTHROPIC_BASE_URL=http://127.0.0.1:${proxyPort}`);
-
-  // Mirror the host's auth method with a placeholder value.
+  // Pass auth credentials directly to the container
   if (process.env.ANTHROPIC_API_KEY) {
-    args.push('-e', 'ANTHROPIC_API_KEY=placeholder');
-  } else {
-    args.push('-e', 'CLAUDE_CODE_OAUTH_TOKEN=placeholder');
+    args.push('-e', `ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY}`);
+  } else if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+    args.push('-e', `CLAUDE_CODE_OAUTH_TOKEN=${process.env.CLAUDE_CODE_OAUTH_TOKEN}`);
   }
 
-  // Pass Dropbox credentials to container for MCP server
-  if (process.env.DROPBOX_CLIENT_ID) {
-    args.push('-e', `DROPBOX_CLIENT_ID=${process.env.DROPBOX_CLIENT_ID}`);
-  }
-  if (process.env.DROPBOX_CLIENT_SECRET) {
-    args.push(
-      '-e',
-      `DROPBOX_CLIENT_SECRET=${process.env.DROPBOX_CLIENT_SECRET}`,
-    );
-  }
-  if (process.env.DROPBOX_REFRESH_TOKEN) {
-    args.push(
-      '-e',
-      `DROPBOX_REFRESH_TOKEN=${process.env.DROPBOX_REFRESH_TOKEN}`,
-    );
-  }
+  // Dropbox: intentionally excluded — Jeeves does NOT use Dropbox (Power Glove only)
 
   // Pass calendar IDs to container for multi-calendar MCP server
   if (process.env.CALENDAR_IDS) {
@@ -324,6 +307,40 @@ async function buildContainerArgs(
   return args;
 }
 
+/** Post-session memory consolidation (non-fatal). */
+function refreshMemoryKernel(groupDir: string, groupName: string): void {
+  const memoryDir = path.join(groupDir, 'memory-kernel');
+  if (!fs.existsSync(memoryDir)) return;
+  try {
+    execSync(`npx mk reflect -d "${memoryDir}"`, { timeout: 10000, stdio: 'ignore' });
+    const claudeMdPath = path.join(groupDir, 'CLAUDE-MEMORY.md');
+    execSync(`npx mk render "${memoryDir}" "${claudeMdPath}"`, { timeout: 10000, stdio: 'ignore' });
+    logger.debug({ group: groupName }, 'Memory kernel refreshed');
+  } catch (err) {
+    logger.warn({ group: groupName, err }, 'Memory kernel refresh failed (non-fatal)');
+  }
+}
+
+const HEALTH_DIR = path.join(os.homedir(), 'shared', 'health');
+
+/** Write heartbeat file so the health checker knows we're alive. */
+function writeHeartbeat(groupName: string): void {
+  try {
+    if (!fs.existsSync(HEALTH_DIR)) return;
+    const slug = ASSISTANT_NAME.toLowerCase().replace(/[-_\s]+/g, '').replace(/bot$/, '');
+    const filePath = path.join(HEALTH_DIR, `${slug}.json`);
+    fs.writeFileSync(filePath, JSON.stringify({
+      agent: ASSISTANT_NAME,
+      status: 'online',
+      last_heartbeat: new Date().toISOString(),
+      last_task: `processed ${groupName}`,
+      error: null,
+    }, null, 2) + '\n');
+  } catch {
+    // Non-fatal: don't let heartbeat failure break anything
+  }
+}
+
 export async function runContainerAgent(
   group: RegisteredGroup,
   input: ContainerInput,
@@ -337,7 +354,7 @@ export async function runContainerAgent(
 
   const mounts = buildVolumeMounts(group, input.isMain);
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
-  const containerName = `nanoclaw-${safeName}-${Date.now()}`;
+  const containerName = `${CONTAINER_PREFIX}-${safeName}-${Date.now()}`;
   // Main group uses the default OneCLI agent; others use their own agent.
   const agentIdentifier = input.isMain
     ? undefined
@@ -597,9 +614,26 @@ export async function runContainerAgent(
             ``,
           );
         }
+        // Redact secret values from container args before logging.
+        // Keep env var names visible for debugging but mask the values.
+        const SENSITIVE_PREFIXES = [
+          'CLAUDE_CODE_OAUTH_TOKEN=', 'ANTHROPIC_API_KEY=',
+          'DROPBOX_CLIENT_SECRET=', 'DROPBOX_REFRESH_TOKEN=', 'DROPBOX_ACCESS_TOKEN=',
+          'EBAY_USER_TOKEN=', 'EBAY_REFRESH_TOKEN=', 'EBAY_CERT_ID=',
+          'REGRID_API_TOKEN=', 'TELEGRAM_BOT_TOKEN=',
+          'OPENAI_API_KEY=',
+        ];
+        const redactedArgs = containerArgs.map((arg) => {
+          for (const prefix of SENSITIVE_PREFIXES) {
+            if (arg.startsWith(prefix)) {
+              return `${prefix}[REDACTED]`;
+            }
+          }
+          return arg;
+        });
         logLines.push(
           `=== Container Args ===`,
-          containerArgs.join(' '),
+          redactedArgs.join(' '),
           ``,
           `=== Mounts ===`,
           mounts
@@ -656,6 +690,8 @@ export async function runContainerAgent(
       // Streaming mode: wait for output chain to settle, return completion marker
       if (onOutput) {
         outputChain.then(() => {
+          refreshMemoryKernel(groupDir, group.name);
+          writeHeartbeat(group.name);
           logger.info(
             { group: group.name, duration, newSessionId },
             'Container completed (streaming mode)',
@@ -688,6 +724,8 @@ export async function runContainerAgent(
 
         const output: ContainerOutput = JSON.parse(jsonLine);
 
+        refreshMemoryKernel(groupDir, group.name);
+        writeHeartbeat(group.name);
         logger.info(
           {
             group: group.name,

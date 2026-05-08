@@ -5,6 +5,7 @@ import { OneCLI } from '@onecli-sh/sdk';
 
 import {
   ASSISTANT_NAME,
+  CONTAINER_TIMEOUT,
   DEFAULT_TRIGGER,
   getTriggerPattern,
   GROUPS_DIR,
@@ -28,6 +29,7 @@ import {
 import {
   cleanupOrphans,
   ensureContainerRuntimeRunning,
+  reapStaleContainers,
 } from './container-runtime.js';
 import {
   getAllChats,
@@ -285,6 +287,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   await channel.setTyping?.(chatJid, true);
   let hadError = false;
   let outputSentToUser = false;
+  let firstReplyClosed = false;
 
   const output = await runAgent(
     group,
@@ -307,6 +310,11 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
         if (text) {
           await channel.sendMessage(chatJid, text);
           outputSentToUser = true;
+          if (!firstReplyClosed) {
+            firstReplyClosed = true;
+            // End session after first reply -- SDK result/success only fires at AsyncIterable end, so IPC-piped follow-ups can stall the turn indefinitely.
+            queue.closeStdin(chatJid);
+          }
         }
         // Only reset idle timer on actual results, not session-update markers (result: null)
         resetIdleTimer();
@@ -701,8 +709,12 @@ async function main(): Promise<void> {
       );
       continue;
     }
-    channels.push(channel);
-    await channel.connect();
+    try {
+      await channel.connect();
+      channels.push(channel);
+    } catch (err) {
+      logger.error({ channel: channelName, err }, 'Channel failed to connect — continuing without it');
+    }
   }
   if (channels.length === 0) {
     logger.fatal('No channels connected');
@@ -734,6 +746,12 @@ async function main(): Promise<void> {
       if (!text) return Promise.resolve();
       return channel.sendMessage(jid, text);
     },
+    sendFile: (jid, filePath, fileName, caption) => {
+      const channel = findChannel(channels, jid);
+      if (!channel) throw new Error(`No channel for JID: ${jid}`);
+      if (!channel.sendFile) throw new Error(`Channel ${channel.name} does not support file sending`);
+      return channel.sendFile(jid, filePath, fileName, caption);
+    },
     registeredGroups: () => registeredGroups,
     registerGroup,
     syncGroups: async (force: boolean) => {
@@ -764,6 +782,8 @@ async function main(): Promise<void> {
     },
   });
   startSessionCleanup();
+  const maxContainerAge = IDLE_TIMEOUT + CONTAINER_TIMEOUT;
+  setInterval(() => reapStaleContainers(maxContainerAge), 5 * 60_000);
   queue.setProcessMessagesFn(processGroupMessages);
   recoverPendingMessages();
   startMessageLoop().catch((err) => {
