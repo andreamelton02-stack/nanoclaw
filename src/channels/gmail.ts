@@ -47,7 +47,9 @@ export class GmailChannel implements Channel {
   }
 
   async connect(): Promise<void> {
-    const credDir = process.env.GMAIL_CREDENTIALS_DIR || path.join(os.homedir(), '.gmail-mcp');
+    const credDir =
+      process.env.GMAIL_CREDENTIALS_DIR ||
+      path.join(os.homedir(), '.gmail-mcp');
     const keysPath = path.join(credDir, 'gcp-oauth.keys.json');
     const tokensPath = path.join(credDir, 'credentials.json');
 
@@ -90,7 +92,10 @@ export class GmailChannel implements Channel {
       this.userEmail = profile.data.emailAddress || '';
       logger.info({ email: this.userEmail }, 'Gmail channel connected');
     } catch (err) {
-      logger.error({ err }, 'Gmail OAuth failed — channel disabled. Re-authenticate to fix.');
+      logger.error(
+        { err },
+        'Gmail OAuth failed — channel disabled. Re-authenticate to fix.',
+      );
       this.gmail = null;
       this.oauth2Client = null;
       return;

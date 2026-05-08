@@ -45,7 +45,10 @@ export const DATA_DIR = path.resolve(PROJECT_ROOT, 'data');
 // Prevents cross-instance interference when multiple bots share a host
 // (e.g. cleanupOrphans killing another bot's containers).
 export const CONTAINER_PREFIX =
-  'nc-' + ASSISTANT_NAME.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '');
+  'nc-' +
+  ASSISTANT_NAME.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+$/, '');
 
 export const CONTAINER_IMAGE =
   process.env.CONTAINER_IMAGE || 'nanoclaw-agent:latest';

@@ -713,7 +713,10 @@ async function main(): Promise<void> {
       await channel.connect();
       channels.push(channel);
     } catch (err) {
-      logger.error({ channel: channelName, err }, 'Channel failed to connect — continuing without it');
+      logger.error(
+        { channel: channelName, err },
+        'Channel failed to connect — continuing without it',
+      );
     }
   }
   if (channels.length === 0) {
@@ -749,7 +752,10 @@ async function main(): Promise<void> {
     sendFile: (jid, filePath, fileName, caption) => {
       const channel = findChannel(channels, jid);
       if (!channel) throw new Error(`No channel for JID: ${jid}`);
-      if (!channel.sendFile) throw new Error(`Channel ${channel.name} does not support file sending`);
+      if (!channel.sendFile)
+        throw new Error(
+          `Channel ${channel.name} does not support file sending`,
+        );
       return channel.sendFile(jid, filePath, fileName, caption);
     },
     registeredGroups: () => registeredGroups,

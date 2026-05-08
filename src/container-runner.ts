@@ -190,7 +190,8 @@ function buildVolumeMounts(
 
   // Gmail credentials directory (for Gmail MCP inside the container)
   const homeDir = os.homedir();
-  const gmailDir = process.env.GMAIL_CREDENTIALS_DIR || path.join(homeDir, '.gmail-mcp');
+  const gmailDir =
+    process.env.GMAIL_CREDENTIALS_DIR || path.join(homeDir, '.gmail-mcp');
   if (fs.existsSync(gmailDir)) {
     mounts.push({
       hostPath: gmailDir,
@@ -274,7 +275,10 @@ async function buildContainerArgs(
   if (process.env.ANTHROPIC_API_KEY) {
     args.push('-e', `ANTHROPIC_API_KEY=${process.env.ANTHROPIC_API_KEY}`);
   } else if (process.env.CLAUDE_CODE_OAUTH_TOKEN) {
-    args.push('-e', `CLAUDE_CODE_OAUTH_TOKEN=${process.env.CLAUDE_CODE_OAUTH_TOKEN}`);
+    args.push(
+      '-e',
+      `CLAUDE_CODE_OAUTH_TOKEN=${process.env.CLAUDE_CODE_OAUTH_TOKEN}`,
+    );
   }
 
   // Dropbox: intentionally excluded — Jeeves does NOT use Dropbox (Power Glove only)
@@ -312,12 +316,21 @@ function refreshMemoryKernel(groupDir: string, groupName: string): void {
   const memoryDir = path.join(groupDir, 'memory-kernel');
   if (!fs.existsSync(memoryDir)) return;
   try {
-    execSync(`npx mk reflect -d "${memoryDir}"`, { timeout: 10000, stdio: 'ignore' });
+    execSync(`npx mk reflect -d "${memoryDir}"`, {
+      timeout: 10000,
+      stdio: 'ignore',
+    });
     const claudeMdPath = path.join(groupDir, 'CLAUDE-MEMORY.md');
-    execSync(`npx mk render "${memoryDir}" "${claudeMdPath}"`, { timeout: 10000, stdio: 'ignore' });
+    execSync(`npx mk render "${memoryDir}" "${claudeMdPath}"`, {
+      timeout: 10000,
+      stdio: 'ignore',
+    });
     logger.debug({ group: groupName }, 'Memory kernel refreshed');
   } catch (err) {
-    logger.warn({ group: groupName, err }, 'Memory kernel refresh failed (non-fatal)');
+    logger.warn(
+      { group: groupName, err },
+      'Memory kernel refresh failed (non-fatal)',
+    );
   }
 }
 
@@ -327,15 +340,24 @@ const HEALTH_DIR = path.join(os.homedir(), 'shared', 'health');
 function writeHeartbeat(groupName: string): void {
   try {
     if (!fs.existsSync(HEALTH_DIR)) return;
-    const slug = ASSISTANT_NAME.toLowerCase().replace(/[-_\s]+/g, '').replace(/bot$/, '');
+    const slug = ASSISTANT_NAME.toLowerCase()
+      .replace(/[-_\s]+/g, '')
+      .replace(/bot$/, '');
     const filePath = path.join(HEALTH_DIR, `${slug}.json`);
-    fs.writeFileSync(filePath, JSON.stringify({
-      agent: ASSISTANT_NAME,
-      status: 'online',
-      last_heartbeat: new Date().toISOString(),
-      last_task: `processed ${groupName}`,
-      error: null,
-    }, null, 2) + '\n');
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify(
+        {
+          agent: ASSISTANT_NAME,
+          status: 'online',
+          last_heartbeat: new Date().toISOString(),
+          last_task: `processed ${groupName}`,
+          error: null,
+        },
+        null,
+        2,
+      ) + '\n',
+    );
   } catch {
     // Non-fatal: don't let heartbeat failure break anything
   }
@@ -617,10 +639,16 @@ export async function runContainerAgent(
         // Redact secret values from container args before logging.
         // Keep env var names visible for debugging but mask the values.
         const SENSITIVE_PREFIXES = [
-          'CLAUDE_CODE_OAUTH_TOKEN=', 'ANTHROPIC_API_KEY=',
-          'DROPBOX_CLIENT_SECRET=', 'DROPBOX_REFRESH_TOKEN=', 'DROPBOX_ACCESS_TOKEN=',
-          'EBAY_USER_TOKEN=', 'EBAY_REFRESH_TOKEN=', 'EBAY_CERT_ID=',
-          'REGRID_API_TOKEN=', 'TELEGRAM_BOT_TOKEN=',
+          'CLAUDE_CODE_OAUTH_TOKEN=',
+          'ANTHROPIC_API_KEY=',
+          'DROPBOX_CLIENT_SECRET=',
+          'DROPBOX_REFRESH_TOKEN=',
+          'DROPBOX_ACCESS_TOKEN=',
+          'EBAY_USER_TOKEN=',
+          'EBAY_REFRESH_TOKEN=',
+          'EBAY_CERT_ID=',
+          'REGRID_API_TOKEN=',
+          'TELEGRAM_BOT_TOKEN=',
           'OPENAI_API_KEY=',
         ];
         const redactedArgs = containerArgs.map((arg) => {

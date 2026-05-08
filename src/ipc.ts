@@ -12,7 +12,12 @@ import { RegisteredGroup } from './types.js';
 
 export interface IpcDeps {
   sendMessage: (jid: string, text: string) => Promise<void>;
-  sendFile: (jid: string, filePath: string, fileName: string, caption?: string) => Promise<void>;
+  sendFile: (
+    jid: string,
+    filePath: string,
+    fileName: string,
+    caption?: string,
+  ) => Promise<void>;
   registeredGroups: () => Record<string, RegisteredGroup>;
   registerGroup: (jid: string, group: RegisteredGroup) => void;
   syncGroups: (force: boolean) => Promise<void>;
@@ -93,7 +98,12 @@ export function startIpcWatcher(deps: IpcDeps): void {
                     'Unauthorized IPC message attempt blocked',
                   );
                 }
-              } else if (data.type === 'send_file' && data.chatJid && data.filePath && data.fileName) {
+              } else if (
+                data.type === 'send_file' &&
+                data.chatJid &&
+                data.filePath &&
+                data.fileName
+              ) {
                 const targetGroup = registeredGroups[data.chatJid];
                 if (
                   isMain ||
@@ -112,9 +122,18 @@ export function startIpcWatcher(deps: IpcDeps): void {
                       'send_file path outside group workspace blocked',
                     );
                   } else {
-                    await deps.sendFile(data.chatJid, resolvedPath, data.fileName, data.caption);
+                    await deps.sendFile(
+                      data.chatJid,
+                      resolvedPath,
+                      data.fileName,
+                      data.caption,
+                    );
                     logger.info(
-                      { chatJid: data.chatJid, fileName: data.fileName, sourceGroup },
+                      {
+                        chatJid: data.chatJid,
+                        fileName: data.fileName,
+                        sourceGroup,
+                      },
                       'IPC file sent',
                     );
                   }
@@ -511,12 +530,23 @@ export async function processTaskIpc(
           const resolvedPath = path.resolve(groupDir, filePath);
           if (!resolvedPath.startsWith(groupDir)) {
             logger.warn(
-              { filePath: data.filePath, sourceGroup, groupDir, resolvedPath, GROUPS_DIR },
+              {
+                filePath: data.filePath,
+                sourceGroup,
+                groupDir,
+                resolvedPath,
+                GROUPS_DIR,
+              },
               'send_file path outside group workspace blocked',
             );
             break;
           }
-          await deps.sendFile(data.chatJid, resolvedPath, data.fileName, data.caption);
+          await deps.sendFile(
+            data.chatJid,
+            resolvedPath,
+            data.fileName,
+            data.caption,
+          );
           logger.info(
             { chatJid: data.chatJid, fileName: data.fileName, sourceGroup },
             'IPC file sent',

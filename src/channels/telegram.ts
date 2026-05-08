@@ -20,7 +20,11 @@ import {
  * With --local mode, getFile returns absolute filesystem paths — read directly.
  * With the public API, it returns relative paths — download via HTTP.
  */
-async function downloadFile(apiRoot: string | undefined, botToken: string, filePath: string): Promise<Buffer> {
+async function downloadFile(
+  apiRoot: string | undefined,
+  botToken: string,
+  filePath: string,
+): Promise<Buffer> {
   if (apiRoot && path.isAbsolute(filePath)) {
     return readFile(filePath);
   }
@@ -35,7 +39,11 @@ async function downloadFile(apiRoot: string | undefined, botToken: string, fileP
  * Save a downloaded file to the group's attachments directory.
  * Returns the path relative to the group folder (e.g. "attachments/photo_123.jpg").
  */
-function saveAttachment(group: RegisteredGroup, fileName: string, buf: Buffer): string {
+function saveAttachment(
+  group: RegisteredGroup,
+  fileName: string,
+  buf: Buffer,
+): string {
   const groupDir = resolveGroupFolderPath(group.folder);
   const attachDir = path.join(groupDir, 'attachments');
   fs.mkdirSync(attachDir, { recursive: true });
@@ -91,17 +99,35 @@ function splitCodeBlocks(text: string): (TextSegment | CodeSegment)[] {
 
 function langToExt(lang: string): string {
   const map: Record<string, string> = {
-    typescript: 'ts', ts: 'ts',
-    javascript: 'js', js: 'js',
-    python: 'py', py: 'py',
-    bash: 'sh', sh: 'sh', shell: 'sh', zsh: 'sh',
-    json: 'json', yaml: 'yaml', yml: 'yaml',
-    html: 'html', css: 'css', sql: 'sql',
-    rust: 'rs', go: 'go', java: 'java',
-    cpp: 'cpp', c: 'c', ruby: 'rb',
-    markdown: 'md', md: 'md',
-    xml: 'xml', toml: 'toml', ini: 'ini',
-    dockerfile: 'Dockerfile', docker: 'Dockerfile',
+    typescript: 'ts',
+    ts: 'ts',
+    javascript: 'js',
+    js: 'js',
+    python: 'py',
+    py: 'py',
+    bash: 'sh',
+    sh: 'sh',
+    shell: 'sh',
+    zsh: 'sh',
+    json: 'json',
+    yaml: 'yaml',
+    yml: 'yaml',
+    html: 'html',
+    css: 'css',
+    sql: 'sql',
+    rust: 'rs',
+    go: 'go',
+    java: 'java',
+    cpp: 'cpp',
+    c: 'c',
+    ruby: 'rb',
+    markdown: 'md',
+    md: 'md',
+    xml: 'xml',
+    toml: 'toml',
+    ini: 'ini',
+    dockerfile: 'Dockerfile',
+    docker: 'Dockerfile',
   };
   return map[lang.toLowerCase()] || 'txt';
 }
@@ -306,10 +332,20 @@ export class TelegramChannel implements Channel {
 
         const timestamp = new Date(ctx.message.date * 1000).toISOString();
         const senderName =
-          ctx.from?.first_name || ctx.from?.username || ctx.from?.id?.toString() || 'Unknown';
-        const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+          ctx.from?.first_name ||
+          ctx.from?.username ||
+          ctx.from?.id?.toString() ||
+          'Unknown';
+        const isGroup =
+          ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
 
-        this.opts.onChatMetadata(chatJid, timestamp, undefined, 'telegram', isGroup);
+        this.opts.onChatMetadata(
+          chatJid,
+          timestamp,
+          undefined,
+          'telegram',
+          isGroup,
+        );
         this.opts.onMessage(chatJid, {
           id: ctx.message.message_id.toString(),
           chat_jid: chatJid,
@@ -344,10 +380,20 @@ export class TelegramChannel implements Channel {
 
         const timestamp = new Date(ctx.message.date * 1000).toISOString();
         const senderName =
-          ctx.from?.first_name || ctx.from?.username || ctx.from?.id?.toString() || 'Unknown';
-        const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+          ctx.from?.first_name ||
+          ctx.from?.username ||
+          ctx.from?.id?.toString() ||
+          'Unknown';
+        const isGroup =
+          ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
 
-        this.opts.onChatMetadata(chatJid, timestamp, undefined, 'telegram', isGroup);
+        this.opts.onChatMetadata(
+          chatJid,
+          timestamp,
+          undefined,
+          'telegram',
+          isGroup,
+        );
         this.opts.onMessage(chatJid, {
           id: ctx.message.message_id.toString(),
           chat_jid: chatJid,
@@ -381,10 +427,20 @@ export class TelegramChannel implements Channel {
 
         const timestamp = new Date(ctx.message.date * 1000).toISOString();
         const senderName =
-          ctx.from?.first_name || ctx.from?.username || ctx.from?.id?.toString() || 'Unknown';
-        const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+          ctx.from?.first_name ||
+          ctx.from?.username ||
+          ctx.from?.id?.toString() ||
+          'Unknown';
+        const isGroup =
+          ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
 
-        this.opts.onChatMetadata(chatJid, timestamp, undefined, 'telegram', isGroup);
+        this.opts.onChatMetadata(
+          chatJid,
+          timestamp,
+          undefined,
+          'telegram',
+          isGroup,
+        );
         this.opts.onMessage(chatJid, {
           id: ctx.message.message_id.toString(),
           chat_jid: chatJid,
@@ -419,10 +475,20 @@ export class TelegramChannel implements Channel {
 
         const timestamp = new Date(ctx.message.date * 1000).toISOString();
         const senderName =
-          ctx.from?.first_name || ctx.from?.username || ctx.from?.id?.toString() || 'Unknown';
-        const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+          ctx.from?.first_name ||
+          ctx.from?.username ||
+          ctx.from?.id?.toString() ||
+          'Unknown';
+        const isGroup =
+          ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
 
-        this.opts.onChatMetadata(chatJid, timestamp, undefined, 'telegram', isGroup);
+        this.opts.onChatMetadata(
+          chatJid,
+          timestamp,
+          undefined,
+          'telegram',
+          isGroup,
+        );
         this.opts.onMessage(chatJid, {
           id: ctx.message.message_id.toString(),
           chat_jid: chatJid,
@@ -458,13 +524,39 @@ export class TelegramChannel implements Channel {
         try {
           if (ext === 'docx') {
             const mammoth = await import('mammoth');
-            const result = await mammoth.default.extractRawText({ buffer: buf });
+            const result = await mammoth.default.extractRawText({
+              buffer: buf,
+            });
             extractedText = result.value;
-          } else if (['txt', 'md', 'csv', 'json', 'xml', 'yaml', 'yml', 'log', 'ini', 'cfg', 'conf', 'sh', 'ts', 'js', 'py', 'html', 'css', 'sql'].includes(ext)) {
+          } else if (
+            [
+              'txt',
+              'md',
+              'csv',
+              'json',
+              'xml',
+              'yaml',
+              'yml',
+              'log',
+              'ini',
+              'cfg',
+              'conf',
+              'sh',
+              'ts',
+              'js',
+              'py',
+              'html',
+              'css',
+              'sql',
+            ].includes(ext)
+          ) {
             extractedText = buf.toString('utf-8');
           }
         } catch (extractErr) {
-          logger.warn({ extractErr, fileName }, 'Text extraction failed, file still saved');
+          logger.warn(
+            { extractErr, fileName },
+            'Text extraction failed, file still saved',
+          );
         }
 
         const caption = ctx.message.caption ? `\n${ctx.message.caption}` : '';
@@ -473,10 +565,20 @@ export class TelegramChannel implements Channel {
 
         const timestamp = new Date(ctx.message.date * 1000).toISOString();
         const senderName =
-          ctx.from?.first_name || ctx.from?.username || ctx.from?.id?.toString() || 'Unknown';
-        const isGroup = ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
+          ctx.from?.first_name ||
+          ctx.from?.username ||
+          ctx.from?.id?.toString() ||
+          'Unknown';
+        const isGroup =
+          ctx.chat.type === 'group' || ctx.chat.type === 'supergroup';
 
-        this.opts.onChatMetadata(chatJid, timestamp, undefined, 'telegram', isGroup);
+        this.opts.onChatMetadata(
+          chatJid,
+          timestamp,
+          undefined,
+          'telegram',
+          isGroup,
+        );
         this.opts.onMessage(chatJid, {
           id: ctx.message.message_id.toString(),
           chat_jid: chatJid,
@@ -556,7 +658,10 @@ export class TelegramChannel implements Channel {
           await this.bot.api.sendDocument(
             numericId,
             new InputFile(fileData, fileName),
-            { caption: seg.lang ? `\`${seg.lang}\`` : undefined, parse_mode: 'Markdown' },
+            {
+              caption: seg.lang ? `\`${seg.lang}\`` : undefined,
+              parse_mode: 'Markdown',
+            },
           );
         }
       }
@@ -567,7 +672,12 @@ export class TelegramChannel implements Channel {
     }
   }
 
-  async sendFile(jid: string, filePath: string, fileName: string, caption?: string): Promise<void> {
+  async sendFile(
+    jid: string,
+    filePath: string,
+    fileName: string,
+    caption?: string,
+  ): Promise<void> {
     if (!this.bot) {
       logger.warn('Telegram bot not initialized');
       return;
@@ -576,9 +686,13 @@ export class TelegramChannel implements Channel {
     try {
       const numericId = jid.replace(/^tg:/, '');
       const fileData = await readFile(filePath);
-      await this.bot.api.sendDocument(numericId, new InputFile(fileData, fileName), {
-        caption: caption || undefined,
-      });
+      await this.bot.api.sendDocument(
+        numericId,
+        new InputFile(fileData, fileName),
+        {
+          caption: caption || undefined,
+        },
+      );
       logger.info({ jid, fileName }, 'Telegram file sent');
     } catch (err) {
       logger.error({ jid, fileName, err }, 'Failed to send Telegram file');
