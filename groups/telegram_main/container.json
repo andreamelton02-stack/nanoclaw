@@ -1,0 +1,44 @@
+{
+  "mcpServers": {
+    "memory_kernel": {
+      "command": "node",
+      "args": ["/app/node_modules/memory-kernel/dist/mcp/server.js"],
+      "env": {
+        "MEMORY_DIR": "/workspace/group/memory-kernel",
+        "MCP_AGENT_ID": "jeeevo-bot"
+      }
+    },
+    "calendar": {
+      "command": "node",
+      "args": ["/workspace/agent/mcp-servers/calendar-mcp.js"],
+      "env": {
+        "HOME": "/workspace/group",
+        "CALENDAR_IDS": "primary,vmb439p0tm0o2771bdk93tp094i6f7ml@import.calendar.google.com"
+      },
+      "instructions": "Calendar context: Andrea's primary Google Calendar (andrea.melton02@gmail.com) plus the import feed are mounted at /workspace/group/.calendar-mcp/. Always cite event IDs and ISO timestamps when asked for schedule info; never hallucinate."
+    },
+    "gmail": {
+      "command": "npx",
+      "args": ["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
+      "env": {
+        "HOME": "/workspace/group"
+      }
+    },
+    "drive": {
+      "command": "node",
+      "args": ["/workspace/agent/mcp-servers/drive-mcp.js"],
+      "env": {
+        "HOME": "/workspace/group"
+      }
+    }
+  },
+  "packages": {
+    "apt": [],
+    "npm": []
+  },
+  "additionalMounts": [],
+  "skills": "all",
+  "provider": "claude",
+  "groupName": "Main",
+  "assistantName": "jeeevo-bot"
+}
