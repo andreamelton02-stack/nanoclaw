@@ -21,17 +21,19 @@ DRIFT_THRESHOLD=10
 DRY_RUN=0
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=1
 
-# 1. Auth check
-if ! gh auth status >/dev/null 2>&1; then
-  echo "SKIP: gh not authenticated"
+# 1. Auth check — capture stderr so cron logs the actual reason instead of failing silent
+ts() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
+auth_err=$(gh auth status 2>&1) || {
+  echo "$(ts) SKIP: gh auth status failed (config=${GH_CONFIG_DIR:-default})"
+  echo "$auth_err" | sed 's/^/  /'
   exit 1
-fi
+}
 
 # Andrea's token is needed to write issues on her fork (cron runs with Jon active).
 # Read-only API calls below work fine with whichever account is active.
 ANDREA_TOKEN=$(gh auth token -u andreamelton02-stack 2>/dev/null || true)
 if [ -z "$ANDREA_TOKEN" ]; then
-  echo "SKIP: no stored token for andreamelton02-stack"
+  echo "$(ts) SKIP: no stored token for andreamelton02-stack"
   exit 1
 fi
 
