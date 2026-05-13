@@ -1,6 +1,34 @@
-# NanoClaw
+# NanoClaw (Jeeves)
 
 Personal Claude assistant. See [README.md](README.md) for philosophy and setup. See [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md) for architecture decisions.
+
+## OAuth Lock (Jeeves = Andrea)  read before any Google-auth claim
+
+Jeeves is **connected to Google via OAuth**.  The GCP project is **jeeves-490713** (project number `501488433537`), owner `andrea.melton02@gmail.com`, **PUBLISHED to production 2026-04-16**.  Refresh tokens are **indefinite**.  Do NOT raise the "7-day testing-mode expiry" hypothesis ever again.
+
+Identifier: every Jeeves `gcp-oauth.keys.json` has `client_id` starting with **`501...`**.  That is the only authoritative ownership signal.
+
+**Contamination warning:** the `project_id` STRING inside Jeeves's `gcp-oauth.keys.json` literally reads `bubbly-mantis-488216-k1`.  This is wrong, inherited from a template-copy of Jon's keys file when Jeeves was set up.  **Ignore that field entirely.**  Jeeves's `client_id` (501...) correctly authenticates to `jeeves-490713`.  Jon has corrected this drift 50+ times.  Do not say "Jeeves is on bubbly-mantis."  Bubbly-mantis is Jon's project, period.
+
+Credential paths (host) - all three live at `~/`:
+- Gmail: `~/.gmail-mcp-andrea/` (referenced by `GMAIL_CREDENTIALS_DIR=/home/melto007/.gmail-mcp-andrea` in `.env`; forwarded into container by `src/container-runner.ts` lines ~193-198)
+- Calendar: `~/.calendar-mcp-andrea/` (legacy host-home path; **not actually read by the bot**)
+- Drive: `~/.drive-mcp-andrea/`
+
+Credential paths (the ones the container actually reads via `HOME=/workspace/group` resolution in the calendar MCP subprocess):
+- Calendar: `~/nanoclaw-jeeves/groups/telegram_main/.calendar-mcp/credentials.json` <- THIS is the one that matters for calendar.
+- Gmail: container reads via the `GMAIL_CREDENTIALS_DIR` env injection, not via `HOME` resolution.
+
+### Hard rules
+
+1.  Never `cp` between `~/.{gmail,calendar,drive}-mcp-andrea/` and `~/.{gmail,calendar,drive}-mcp/`.  Power Glove is a separate bot in a separate container with a separate Google account (jonsmelton@gmail.com, project 523151035551).  Cross-bot ops blocked by the PreToolUse hook at `~/.claude/hooks/oauth-guard.sh`.
+2.  The only verified-working Calendar reauth helper is `scripts/auth-jeeves-calendar.cjs` (port 3777, login_hint=andrea.melton02@gmail.com, identity check).  Do not run it unless `invalid_grant` is verified by curl against `https://oauth2.googleapis.com/token` with the actual refresh_token.
+3.  Never edit `credentials.json` or `gcp-oauth.keys.json` directly.  The hook will surface a confirmation prompt if you try.
+4.  Cross-bot file copy is forbidden.  No exceptions, even with confirmation.  Jon has stated this directly multiple times.
+
+### When Google integration looks broken
+
+Read in this order: this section, then `~/.claude/projects/-home-melto007/memory/project_gmail_publish_app.md` (diagnostic curl + canonical mapping), then `project_calendar_oauth_setup_pattern.md`.  Only then form a hypothesis.
 
 ## Quick Context
 
@@ -23,7 +51,7 @@ Single Node.js process with skill-based channel system. Channels (WhatsApp, Tele
 
 ## Secrets / Credentials / Proxy (OneCLI)
 
-API keys, secret keys, OAuth tokens, and auth credentials are managed by the OneCLI gateway — which handles secret injection into containers at request time, so no keys or tokens are ever passed to containers directly. Run `onecli --help`.
+Upstream nanoclaw uses an OneCLI gateway for secret injection.  Jeeves inherits that text from upstream, but **Google OAuth credentials are NOT routed through OneCLI** -- they live as files on disk per the "OAuth Lock" section above.  When in doubt about a Google integration, the answer is in OAuth Lock, not OneCLI.
 
 ## Skills
 
