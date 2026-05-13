@@ -27,7 +27,7 @@
     "googleapis": "^144.0.0",
     "grammy": "^1.39.3",
     "mammoth": "^1.12.0",
-    "memory-kernel": "^1.16.0",
+    "memory-kernel": "github:mainion-ai/memory-kernel#main",
     "openai": "^6.27.0",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
